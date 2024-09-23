@@ -20,8 +20,7 @@ type PokeAPI struct {
 }
 
 func GetLocationAreas(url *string) (PokeAPI, error) {
-	validUrl := *url
-	if validUrl == "" {
+	if url == nil {
 		return PokeAPI{}, errors.New("url is empty or invalid")
 	}
 

@@ -50,6 +50,7 @@ func Commands() map[string]cliCommand {
 		"mapb": {
 			name:        "mapb",
 			description: "displays the names of 20 previous location areas, each subsequent call displays 20 more previous locations. It's a way to go back!",
+			callback:    commadMapb,
 		},
 	}
 }
@@ -90,6 +91,21 @@ func sanitize(text string) string {
 	output := strings.TrimSpace(text)
 	output = strings.ToLower(output)
 	return output
+}
+
+func commadMapb(c *config) error {
+	res, err := api.GetLocationAreas(c.PreviousURL)
+	if err != nil {
+		return fmt.Errorf("an error occured fecthing locations: %w", err)
+	}
+
+	for _, result := range res.Results {
+		fmt.Fprintf(os.Stdout, "%v\n", result.Name)
+	}
+
+	c.NextURL = res.Next
+	c.PreviousURL = res.Previous
+	return nil
 }
 
 func commandMap(c *config) error {
