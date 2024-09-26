@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/Prodigy00/pokedexcli/internal/api"
+	"github.com/Prodigy00/pokedexcli/internal/pokecache"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -15,6 +17,7 @@ const (
 type config struct {
 	NextURL     *string
 	PreviousURL *string
+	cache       *pokecache.Cache
 }
 type cliCommand struct {
 	name        string
@@ -50,7 +53,7 @@ func Commands() map[string]cliCommand {
 		"mapb": {
 			name:        "mapb",
 			description: "displays the names of 20 previous location areas, each subsequent call displays 20 more previous locations. It's a way to go back!",
-			callback:    commadMapb,
+			callback:    commandMapb,
 		},
 	}
 }
@@ -59,10 +62,14 @@ func main() {
 	cmds := Commands()
 	printPrompt()
 
+	//create cache
+	cache := pokecache.NewCache(5 * time.Second)
+
 	nextUrl := "https://pokeapi.co/api/v2/location-area"
 	cfg := config{
 		NextURL:     &nextUrl,
 		PreviousURL: nil,
+		cache:       cache,
 	}
 
 	reader := bufio.NewScanner(os.Stdin)
@@ -93,8 +100,9 @@ func sanitize(text string) string {
 	return output
 }
 
-func commadMapb(c *config) error {
-	res, err := api.GetLocationAreas(c.PreviousURL)
+func commandMapb(c *config) error {
+	newPokeApi := api.NewPokeAPI(c.cache)
+	res, err := newPokeApi.GetLocationAreas(c.PreviousURL)
 	if err != nil {
 		return fmt.Errorf("an error occured fecthing locations: %w", err)
 	}
@@ -109,7 +117,8 @@ func commadMapb(c *config) error {
 }
 
 func commandMap(c *config) error {
-	res, err := api.GetLocationAreas(c.NextURL)
+	newPokeApi := api.NewPokeAPI(c.cache)
+	res, err := newPokeApi.GetLocationAreas(c.NextURL)
 	if err != nil {
 		return fmt.Errorf("an error occured fecthing locations: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Prodigy00/pokedexcli/internal/pokecache"
 	"io"
 	"net/http"
 )
@@ -17,11 +18,27 @@ type PokeAPI struct {
 	Next     *string  `json:"next"`
 	Previous *string  `json:"previous"`
 	Results  []Result `json:"results"`
+	cache    pokecache.CacheAPI
 }
 
-func GetLocationAreas(url *string) (PokeAPI, error) {
+func NewPokeAPI(cache pokecache.CacheAPI) *PokeAPI {
+	return &PokeAPI{
+		cache: cache,
+	}
+}
+
+func (p *PokeAPI) GetLocationAreas(url *string) (PokeAPI, error) {
 	if url == nil {
 		return PokeAPI{}, errors.New("url is empty or invalid")
+	}
+
+	hit, exists := p.cache.Get(*url)
+	if exists {
+		var pke PokeAPI
+		err := json.Unmarshal(hit, &pke)
+		if err != nil {
+			return PokeAPI{}, err
+		}
 	}
 
 	res, err := http.Get(*url)
@@ -41,6 +58,8 @@ func GetLocationAreas(url *string) (PokeAPI, error) {
 	if err != nil {
 		return PokeAPI{}, fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
+
+	p.cache.Add(*url, body)
 
 	return result, nil
 }
