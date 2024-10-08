@@ -26,7 +26,7 @@ type EncounterMethodRate struct {
 }
 
 type EncounterMethod struct {
-	Name string `json:"name""`
+	Name string `json:"name"`
 	Url  string `json:"url"`
 }
 
