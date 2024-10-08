@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Prodigy00/pokedexcli/internal/api"
 	"github.com/Prodigy00/pokedexcli/internal/pokecache"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -19,10 +20,11 @@ type config struct {
 	PreviousURL *string
 	cache       *pokecache.Cache
 }
+
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(c *config) error
+	callback    func(c *config, args ...string) error
 }
 
 func (cmd *cliCommand) Description() string {
@@ -55,6 +57,16 @@ func Commands() map[string]cliCommand {
 			description: "displays the names of 20 previous location areas, each subsequent call displays 20 more previous locations. It's a way to go back!",
 			callback:    commandMapb,
 		},
+		"explore": {
+			name:        "explore",
+			description: "displays a list of all the Pokemon in a given area",
+			callback:    commandExplore,
+		},
+		"catch": {
+			name:        "catch",
+			description: "attempts to catch a Pokemon",
+			callback:    commandCatch,
+		},
 	}
 }
 
@@ -63,7 +75,7 @@ func main() {
 	printPrompt()
 
 	//create cache
-	cache := pokecache.NewCache(5 * time.Second)
+	cache := pokecache.NewCache(20 * time.Second)
 
 	nextUrl := "https://pokeapi.co/api/v2/location-area"
 	cfg := config{
@@ -75,14 +87,22 @@ func main() {
 	reader := bufio.NewScanner(os.Stdin)
 	for reader.Scan() {
 		text := sanitize(reader.Text())
-		if cmd, ok := cmds[text]; ok {
-			if err := cmd.callback(&cfg); err != nil {
-				fmt.Fprintln(os.Stderr, err)
+		parts := strings.Fields(text)
+
+		if len(parts) > 0 {
+			cmdName := parts[0]
+			cmdArgs := parts[1:]
+
+			if cmd, ok := cmds[cmdName]; ok {
+				if err := cmd.callback(&cfg, cmdArgs...); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Invalid command: %s\n", text)
 				return
 			}
-		} else {
-			fmt.Fprintf(os.Stderr, "Invalid command: %s\n", text)
-			return
+
 		}
 		printPrompt()
 	}
@@ -100,7 +120,44 @@ func sanitize(text string) string {
 	return output
 }
 
-func commandMapb(c *config) error {
+func commandCatch(c *config, args ...string) error {
+	newPokeApi := api.NewPokeAPI(c.cache)
+	if len(args) < 1 {
+		return fmt.Errorf("please provide a pokemon name")
+	}
+	fmt.Printf("Throwing a Pokeball at %s...\n", args[0])
+	res, err := newPokeApi.CatchPokemon(args[0])
+	if err != nil {
+		return fmt.Errorf("an error occured attempting to catch pokemon with the name %s: %w", args[0], err)
+	}
+	chance := rand.Intn(res)
+
+	if chance < 50 {
+		fmt.Printf("%s escaped!\n", args[0])
+		return nil
+	}
+	fmt.Printf("%s was caught!\n", args[0])
+
+	return nil
+}
+
+func commandExplore(c *config, args ...string) error {
+	newPokeApi := api.NewPokeAPI(c.cache)
+	if len(args) < 1 {
+		return fmt.Errorf("please provide a valid area for exploration")
+	}
+	res, err := newPokeApi.GetLocationArea(args[0])
+	if err != nil {
+		return fmt.Errorf("an error occured fecthing location with the name %s: %w", args[0], err)
+	}
+	fmt.Printf("Exploring %s...\n", args[0])
+	for _, v := range res {
+		fmt.Printf("- %s\n", v)
+	}
+	return nil
+}
+
+func commandMapb(c *config, args ...string) error {
 	newPokeApi := api.NewPokeAPI(c.cache)
 	res, err := newPokeApi.GetLocationAreas(c.PreviousURL)
 	if err != nil {
@@ -116,7 +173,7 @@ func commandMapb(c *config) error {
 	return nil
 }
 
-func commandMap(c *config) error {
+func commandMap(c *config, args ...string) error {
 	newPokeApi := api.NewPokeAPI(c.cache)
 	res, err := newPokeApi.GetLocationAreas(c.NextURL)
 	if err != nil {
@@ -132,7 +189,7 @@ func commandMap(c *config) error {
 	return nil
 }
 
-func commandHelp(c *config) error {
+func commandHelp(c *config, args ...string) error {
 	cmds := Commands()
 
 	fmt.Println("Welcome to the Pokedex!")
@@ -143,7 +200,7 @@ func commandHelp(c *config) error {
 	return nil
 }
 
-func commandExit(c *config) error {
+func commandExit(c *config, args ...string) error {
 	os.Exit(0)
 	return nil
 }

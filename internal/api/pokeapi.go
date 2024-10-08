@@ -9,10 +9,16 @@ import (
 	"net/http"
 )
 
+var (
+	ErrNotFound   = errors.New("not found")
+	caughtPokemon map[string]Pokemon
+)
+
 type Result struct {
 	Name string `json:"name"`
 	Url  string `json:"url"`
 }
+
 type PokeAPI struct {
 	Count    int      `json:"count"`
 	Next     *string  `json:"next"`
@@ -62,4 +68,101 @@ func (p *PokeAPI) GetLocationAreas(url *string) (PokeAPI, error) {
 	p.cache.Add(*url, body)
 
 	return result, nil
+}
+
+func (p *PokeAPI) GetLocationArea(name string) ([]string, error) {
+	if name == "" {
+		return []string{}, errors.New("location name is empty or invalid")
+	}
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%s", name)
+
+	hit, exists := p.cache.Get(url)
+	if exists {
+		var locationArea LocationArea
+		err := json.Unmarshal(hit, &locationArea)
+		if err != nil {
+			return []string{}, fmt.Errorf("failed to unmarshal locationArea: %w", err)
+		}
+
+		var pokemons []string
+		for _, k := range locationArea.PokemonEncounters {
+			pokemons = append(pokemons, k.Pokemon.Name)
+		}
+		return pokemons, nil
+	}
+
+	res, err := http.Get(url)
+	if err != nil {
+		return []string{}, err
+	}
+	if res.StatusCode == http.StatusNotFound {
+		return []string{}, ErrNotFound
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		return []string{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var result LocationArea
+
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return []string{}, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+
+	var pokemons []string
+	for _, k := range result.PokemonEncounters {
+		pokemons = append(pokemons, k.Pokemon.Name)
+	}
+
+	p.cache.Add(url, body)
+
+	return pokemons, nil
+}
+
+func (p *PokeAPI) CatchPokemon(name string) (int, error) {
+	if name == "" {
+		return 0, errors.New("pokemon name is empty or invalid")
+	}
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s", name)
+
+	hit, exists := p.cache.Get(url)
+	if exists {
+		var caughtPokemon CatchPokemonResult
+		err := json.Unmarshal(hit, &caughtPokemon)
+		if err != nil {
+			return 0, fmt.Errorf("failed to unmarshal caught_pokemon: %w", err)
+		}
+		return caughtPokemon.BaseExperience, nil
+	}
+
+	res, err := http.Get(url)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch pokemon: %w", err)
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response body: %w", err)
+	}
+	var result CatchPokemonResult
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+
+	cp := make(map[string]Pokemon)
+	cp[result.Name] = Pokemon{
+		Name: result.Name,
+		Url:  url,
+	}
+
+	caughtPokemon = cp
+
+	p.cache.Add(url, body)
+
+	return result.BaseExperience, nil
 }
