@@ -73,6 +73,11 @@ func Commands() map[string]cliCommand {
 			description: "displays the stats of a Pokemon that has been caught(seen) before",
 			callback:    commandInspect,
 		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "displays your caught pokemons",
+			callback:    commandPokedex,
+		},
 	}
 }
 
@@ -128,9 +133,17 @@ func sanitize(text string) string {
 	return output
 }
 
-func commandInspect(cfg *config, args ...string) error {
+func commandPokedex(c *config, args ...string) error {
+	fmt.Println("Your Pokedex:")
+	for _, t := range c.caughtPokemon {
+		fmt.Printf(" - %v\n", t.Name)
+	}
+	return nil
+}
+
+func commandInspect(c *config, args ...string) error {
 	name := args[0]
-	cp, ok := cfg.caughtPokemon[name]
+	cp, ok := c.caughtPokemon[name]
 	if !ok {
 		fmt.Fprintf(os.Stdout, "you have not caught that pokemon!\n")
 		return nil
@@ -176,20 +189,16 @@ func commandCatch(c *config, args ...string) error {
 
 	chance := rand.Intn(res.BaseExperience)
 
-	if chance < 50 {
+	if chance < 25 {
 		fmt.Printf("%s escaped!\n", args[0])
 		return nil
 	}
 
 	fmt.Printf("%s was caught!\n", args[0])
+	fmt.Println("You may now inspect it with the inspect command.")
 
 	c.caughtPokemon[args[0]] = res
 
-	keys := make([]string, 0, len(c.caughtPokemon))
-	for k := range c.caughtPokemon {
-		keys = append(keys, k)
-	}
-	fmt.Printf("caught Pokemon %s\n", keys)
 	return nil
 }
 
