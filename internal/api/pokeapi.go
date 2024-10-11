@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	ErrNotFound   = errors.New("not found")
-	caughtPokemon map[string]Pokemon
+	ErrNotFound = errors.New("not found")
 )
 
 type Result struct {
@@ -123,9 +122,9 @@ func (p *PokeAPI) GetLocationArea(name string) ([]string, error) {
 	return pokemons, nil
 }
 
-func (p *PokeAPI) CatchPokemon(name string) (int, error) {
+func (p *PokeAPI) CatchPokemon(name string) (CatchPokemonResult, error) {
 	if name == "" {
-		return 0, errors.New("pokemon name is empty or invalid")
+		return CatchPokemonResult{}, errors.New("pokemon name is empty or invalid")
 	}
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s", name)
 
@@ -134,35 +133,27 @@ func (p *PokeAPI) CatchPokemon(name string) (int, error) {
 		var caughtPokemon CatchPokemonResult
 		err := json.Unmarshal(hit, &caughtPokemon)
 		if err != nil {
-			return 0, fmt.Errorf("failed to unmarshal caught_pokemon: %w", err)
+			return CatchPokemonResult{}, fmt.Errorf("failed to unmarshal caught_pokemon: %w", err)
 		}
-		return caughtPokemon.BaseExperience, nil
+		return caughtPokemon, nil
 	}
 
 	res, err := http.Get(url)
 	if err != nil {
-		return 0, fmt.Errorf("failed to fetch pokemon: %w", err)
+		return CatchPokemonResult{}, fmt.Errorf("failed to fetch pokemon: %w", err)
 	}
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read response body: %w", err)
+		return CatchPokemonResult{}, fmt.Errorf("failed to read response body: %w", err)
 	}
 	var result CatchPokemonResult
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return 0, fmt.Errorf("failed to unmarshal response body: %w", err)
+		return CatchPokemonResult{}, fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
-
-	cp := make(map[string]Pokemon)
-	cp[result.Name] = Pokemon{
-		Name: result.Name,
-		Url:  url,
-	}
-
-	caughtPokemon = cp
 
 	p.cache.Add(url, body)
 
-	return result.BaseExperience, nil
+	return result, nil
 }

@@ -16,9 +16,10 @@ const (
 )
 
 type config struct {
-	NextURL     *string
-	PreviousURL *string
-	cache       *pokecache.Cache
+	NextURL       *string
+	PreviousURL   *string
+	cache         *pokecache.Cache
+	caughtPokemon map[string]api.CatchPokemonResult
 }
 
 type cliCommand struct {
@@ -67,6 +68,11 @@ func Commands() map[string]cliCommand {
 			description: "attempts to catch a Pokemon",
 			callback:    commandCatch,
 		},
+		"inspect": {
+			name:        "inspect",
+			description: "displays the stats of a Pokemon that has been caught(seen) before",
+			callback:    commandInspect,
+		},
 	}
 }
 
@@ -78,10 +84,12 @@ func main() {
 	cache := pokecache.NewCache(20 * time.Second)
 
 	nextUrl := "https://pokeapi.co/api/v2/location-area"
+
 	cfg := config{
-		NextURL:     &nextUrl,
-		PreviousURL: nil,
-		cache:       cache,
+		NextURL:       &nextUrl,
+		PreviousURL:   nil,
+		cache:         cache,
+		caughtPokemon: make(map[string]api.CatchPokemonResult),
 	}
 
 	reader := bufio.NewScanner(os.Stdin)
@@ -120,6 +128,41 @@ func sanitize(text string) string {
 	return output
 }
 
+func commandInspect(cfg *config, args ...string) error {
+	name := args[0]
+	cp, ok := cfg.caughtPokemon[name]
+	if !ok {
+		fmt.Fprintf(os.Stdout, "you have not caught that pokemon!\n")
+		return nil
+	}
+	fmt.Printf("Name: %s\n", cp.Name)
+	fmt.Printf("Height: %d\n", cp.Height)
+	fmt.Printf("Weight: %d\n", cp.Weight)
+	fmt.Println("Stats:")
+	for _, k := range cp.Stats {
+		switch k.Stat.Name {
+		case "hp":
+			fmt.Printf(" -hp: %d\n", k.BaseStat)
+		case "attack":
+			fmt.Printf(" -attack: %d\n", k.BaseStat)
+		case "defense":
+			fmt.Printf(" -defense: %d\n", k.BaseStat)
+		case "special-attack":
+			fmt.Printf(" -special-attack: %d\n", k.BaseStat)
+		case "special-defense":
+			fmt.Printf(" -special-defense: %d\n", k.BaseStat)
+		case "speed":
+			fmt.Printf(" -speed: %d\n", k.BaseStat)
+		}
+	}
+	fmt.Println("Types:")
+	for _, t := range cp.Types {
+		fmt.Printf(" - %v\n", t.Type.Name)
+	}
+
+	return nil
+}
+
 func commandCatch(c *config, args ...string) error {
 	newPokeApi := api.NewPokeAPI(c.cache)
 	if len(args) < 1 {
@@ -130,14 +173,23 @@ func commandCatch(c *config, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("an error occured attempting to catch pokemon with the name %s: %w", args[0], err)
 	}
-	chance := rand.Intn(res)
+
+	chance := rand.Intn(res.BaseExperience)
 
 	if chance < 50 {
 		fmt.Printf("%s escaped!\n", args[0])
 		return nil
 	}
+
 	fmt.Printf("%s was caught!\n", args[0])
 
+	c.caughtPokemon[args[0]] = res
+
+	keys := make([]string, 0, len(c.caughtPokemon))
+	for k := range c.caughtPokemon {
+		keys = append(keys, k)
+	}
+	fmt.Printf("caught Pokemon %s\n", keys)
 	return nil
 }
 
