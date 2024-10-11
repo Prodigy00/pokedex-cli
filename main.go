@@ -256,7 +256,7 @@ func commandHelp(c *config, args ...string) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	for _, cmd := range cmds {
-		fmt.Printf("%s:%s\n", cmd.Name(), cmd.Description())
+		fmt.Printf("%s: %s\n", cmd.Name(), cmd.Description())
 	}
 	return nil
 }
